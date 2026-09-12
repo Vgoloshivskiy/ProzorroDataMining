@@ -1,0 +1,35 @@
+services:
+  prozorrodatamining.api:
+    image: ${DOCKER_REGISTRY-}prozorrodataminingapi
+    build:
+      context: .
+      dockerfile: ProzorroDataMining.Api/Dockerfile
+    depends_on:
+      - postgresdb
+    environment:
+      - POSTGRES_HOST=postgresdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DATABASE=ProzorroData
+      - POSTGRES_PORT=5432
+
+  postgresdb:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=ProzorroData
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ProzorroDataMining.Api/DbInit:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - postgres-network
+
+networks:
+  postgres-network:
+    driver: bridge
+
+

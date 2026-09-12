@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="docker-compose.dcproj">
+    <Build />
+  </Project>
+  <Project Path="ProzorroDataMining.Api/ProzorroDataMining.Api.csproj" />
+  <Project Path="ProzorroDataMining.Application/ProzorroDataMining.Application.csproj" Id="b482a580-4261-4389-a899-c8c5ddb26ac8" />
+  <Project Path="ProzorroDataMining.Core/ProzorroDataMining.Core.csproj" />
+  <Project Path="ProzorroDataMining.Infrastructure/ProzorroDataMining.Infrastructure.csproj" />
+</Solution>
