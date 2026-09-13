@@ -11,5 +11,7 @@ namespace ProzorroDataMining.Application.RepositoryContracts
         Task UpsertTendersAsync(
             IReadOnlyCollection<TenderImportModel> tenders,
             CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyCollection<TenderListItemDto>> GetTenderListAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     }
 }

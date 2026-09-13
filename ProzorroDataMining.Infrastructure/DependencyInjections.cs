@@ -2,9 +2,10 @@
 using ProzorroDataMining.Application.ApplicationContracts;
 using ProzorroDataMining.Application.RepositoryContracts;
 using ProzorroDataMining.Infrastructure.DbContext;
-using ProzorroDataMining.Infrastructure.HttpClients;
 using ProzorroDataMining.Infrastructure.Repositories;
+using ProzorroDataMining.Infrastructure.HttpClients;
 using System;
+using Polly;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -26,32 +27,30 @@ public static class DependencyInjections
 
         // Repositories
         services.AddTransient<ITenderRepository, TenderRepository>();
-        services.AddTransient<IItemRepository, Repositories.ItemRepository>();
+        services.AddTransient<ProzorroDataMining.Application.RepositoryContracts.ITenderAnalyticsRepository, AnalyticsRepository>();
 
-        // Register clients manually (avoid requiring AddHttpClient extension)
-        services.AddSingleton<IExternalDataClient>(sp =>
-        {
-            var http = new System.Net.Http.HttpClient()
+        // Register a shared in-process rate limiter
+        services.AddSingleton<ProzorroDataMining.Infrastructure.Utilities.SimpleTokenBucketRateLimiter>(sp =>
+            new ProzorroDataMining.Infrastructure.Utilities.SimpleTokenBucketRateLimiter(100, 100, TimeSpan.FromSeconds(1)));
+
+        // Configure HttpClientFactory-based typed clients with Polly retry and rate-limit delegating handler
+        // Retry policy: handle transient errors and 429 responses, use exponential backoff with jitter and honor Retry-After when present
+        var retryPolicy = Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .OrResult(r => (int)r.StatusCode == 429 || (int)r.StatusCode >= 500)
+            .WaitAndRetryAsync(5, retryAttempt =>
             {
-                BaseAddress = new Uri("https://public-api.prozorro.gov.ua/api/2.5/"),
-                Timeout = TimeSpan.FromSeconds(30)
-                
-            };
+                var jitter = TimeSpan.FromMilliseconds(new Random().Next(0, 100));
+                return TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1)) + jitter;
+            });
 
-            var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ExternalDataClient>>();
-            return new ExternalDataClient(http, logger);
-        });
-
-        services.AddSingleton<ITenderApiRepository>(sp =>
+        services.AddHttpClient<ITenderApiRepository, TenderApiRepository>(client =>
         {
-            var http = new System.Net.Http.HttpClient()
-            {
-                BaseAddress = new Uri("https://public-api.prozorro.gov.ua/api/2.5/"),
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-
-            return new TenderApiRepository(http);
-        });
+            client.BaseAddress = new Uri("https://public-api.prozorro.gov.ua/api/2.5/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        })
+        .AddHttpMessageHandler(sp => new RateLimitHandler(sp.GetRequiredService<ProzorroDataMining.Infrastructure.Utilities.SimpleTokenBucketRateLimiter>()))
+        .AddPolicyHandler(retryPolicy);
 
         return services;
     }

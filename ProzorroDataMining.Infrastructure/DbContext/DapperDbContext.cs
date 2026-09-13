@@ -10,7 +10,7 @@ namespace ProzorroDataMining.Infrastructure.DbContext
     public class DapperDbContext
     {
         private readonly IConfiguration _configuration;
-        private readonly NpgsqlConnection _dbConnection;
+        private readonly string _connectionString;
 
         public DapperDbContext(IConfiguration configuration)
         {
@@ -19,7 +19,7 @@ namespace ProzorroDataMining.Infrastructure.DbContext
             string connectionStringTemplate =
                 _configuration.GetConnectionString("PstgresConnection")!;
 
-            string connectionString = connectionStringTemplate
+            _connectionString = connectionStringTemplate
                 .Replace(
                     "$POSTGRES_HOST",
                     Environment.GetEnvironmentVariable("POSTGRES_HOST"))
@@ -35,13 +35,9 @@ namespace ProzorroDataMining.Infrastructure.DbContext
                 .Replace(
                     "$POSTGRES_PASSWORD",
                     Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"));
-
-            _dbConnection = new NpgsqlConnection(connectionString);
         }
 
-        public NpgsqlConnection DbConnection
-        {
-            get { return _dbConnection; }
-        }
+        // Return a new connection instance per call. Callers should open and dispose it.
+        public NpgsqlConnection DbConnection => new NpgsqlConnection(_connectionString);
     }
 }

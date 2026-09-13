@@ -9,6 +9,8 @@ namespace ProzorroDataMining.Core.Entities
     public class TenderImportModel
     {
         public string ExternalId { get; set; }
+        // SHA256 hash of the tender payload used to detect unchanged records and avoid unnecessary updates
+        public string DataHash { get; set; }
         public string CPVCode { get; set; }
         public string Status { get; set; }
         public string ProcuringEntityName { get; set; }

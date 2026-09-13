@@ -22,7 +22,7 @@ services:
       - POSTGRES_DB=ProzorroData
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./ProzorroDataMining.Api/DbInit:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./ProzorroDataMining.Api/Init.js:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     networks:
@@ -32,4 +32,6 @@ networks:
   postgres-network:
     driver: bridge
 
+volumes:
+  postgres_data: {}
 

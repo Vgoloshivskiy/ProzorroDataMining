@@ -72,18 +72,31 @@ namespace ProzorroDataMining.Application.Services
         {
             try
             {
-                var response = await _tenderApiRepository.GetTenderAsync(
-                    tenderId,
-                    cancellationToken);
-
-                var tender = mapper.Map(response);
-
-                if (tender != null)
+                try
                 {
-                    lock (results)
+                    var response = await _tenderApiRepository.GetTenderAsync(
+                        tenderId,
+                        cancellationToken);
+
+                    var tender = mapper.Map(response);
+
+                    if (tender != null)
                     {
-                        results.Add(tender);
+                        lock (results)
+                        {
+                            results.Add(tender);
+                        }
                     }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // propagate cancellation
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Log and continue; we don't want a single failing tender to break the whole batch
+                    _logger.LogWarning(ex, "Failed to fetch tender {TenderId}; skipping.", tenderId);
                 }
             }
             finally
@@ -94,18 +107,18 @@ namespace ProzorroDataMining.Application.Services
         public async IAsyncEnumerable<IReadOnlyCollection<string>> FetchTenderIdBatchesAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var decemberStart = new DateTimeOffset(
-                2025,
-                12,
+            var search_month_start = new DateTimeOffset(
+                2026,
+                8,
                 1,
                 0,
                 0,
                 0,
                 TimeSpan.Zero);
 
-            var januaryStart = new DateTimeOffset(
+            var search_month_end = new DateTimeOffset(
                 2026,
-                1,
+                9,
                 1,
                 0,
                 0,
@@ -134,8 +147,8 @@ namespace ProzorroDataMining.Application.Services
 
                 foreach (var tender in page.Data)
                 {
-                    if (tender.DateCreated >= decemberStart &&
-                        tender.DateCreated < januaryStart &&
+                    if (tender.DateCreated >= search_month_start &&
+                        tender.DateCreated < search_month_end &&
                         string.Equals(
                             tender.Status,
                             "complete",

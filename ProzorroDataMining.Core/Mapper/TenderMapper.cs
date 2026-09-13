@@ -45,6 +45,20 @@ namespace ProzorroDataMining.Core.Mapper
             var cpvCode = GetCpvCode(data);
             var suppliers = GetSupplierNames(data);
 
+            // Compute a simple deterministic hash of the important tender fields to detect unchanged records
+            var payload = new
+            {
+                data.Id,
+                data.Status,
+                Value = data.Value?.Amount,
+                Contracts = data.Contracts?.Select(c => c?.Value?.Amount).ToArray(),
+                Awards = data.Awards?.SelectMany(a => a?.Suppliers?.Select(s => s?.Name)).ToArray(),
+                ProcuringEntity = data.ProcuringEntity?.Name
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(payload);
+            var hash = ComputeSha256Hash(json);
+
             return new TenderImportModel
             {
                 ExternalId = data.Id,
@@ -61,7 +75,19 @@ namespace ProzorroDataMining.Core.Mapper
                 ContractTotal = contractTotal,
                 Savings = savings,
                 BusinessOrganisationNames = suppliers
+                ,
+                DataHash = hash
             };
+        }
+
+        private static string ComputeSha256Hash(string raw)
+        {
+            if (raw == null) return null;
+
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(raw);
+            var hash = sha.ComputeHash(bytes);
+            return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
         }
 
         private string GetCpvCode(TenderDataDto data)

@@ -12,16 +12,12 @@ namespace ProzorroDataMining.Application.Services
     public interface IDataSyncService { Task<bool> RefreshLocalDataAsync(CancellationToken cancellationToken = default); }
     public class DataSyncService : IDataSyncService
     {
-        private readonly IExternalDataClient _dataClient;
-        private readonly IItemRepository _repository;
         private readonly ITenderRepository _tenderRepository;
         private readonly ILogger _logger;
         private readonly ITenderService _tenderService;
-        public DataSyncService(IExternalDataClient dataClient, IItemRepository repository, ILogger<DataSyncService> logger, ITenderService tenderService, ITenderRepository tenderRepository)
+        public DataSyncService(ILogger<DataSyncService> logger, ITenderService tenderService, ITenderRepository tenderRepository)
         {
             _tenderService = tenderService;
-            _dataClient = dataClient;
-            _repository = repository;
             _logger = logger;
             _tenderRepository = tenderRepository;
         }

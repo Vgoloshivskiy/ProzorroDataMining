@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 using ProzorroDataMining.Core.Entities.DTOs;
 using ProzorroDataMining.Application.RepositoryContracts;
 using System.Net.Http.Json;
+using ProzorroDataMining.Infrastructure.Utilities;
 
 namespace ProzorroDataMining.Infrastructure.Repositories
 {
-
     public class TenderApiRepository : ITenderApiRepository
     {
         private readonly HttpClient _httpClient;
@@ -23,32 +23,22 @@ namespace ProzorroDataMining.Infrastructure.Repositories
             string uri,
             CancellationToken cancellationToken = default)
         {
-            var response = await _httpClient.GetAsync(
-                uri,
-                cancellationToken);
-
+            var response = await _httpClient.GetAsync(uri, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<TenderListResponseDto>(
-                cancellationToken: cancellationToken);
-
-            return result;
+            var result = await response.Content.ReadFromJsonAsync<TenderListResponseDto>(cancellationToken: cancellationToken);
+            return result!;
         }
 
         public async Task<TenderResponseDto> GetTenderAsync(
             string tenderId,
             CancellationToken cancellationToken = default)
         {
-            var response = await _httpClient.GetAsync(
-                "tenders/" + tenderId,
-                cancellationToken);
-
+            var response = await _httpClient.GetAsync("tenders/" + tenderId, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<TenderResponseDto>(
-                cancellationToken: cancellationToken);
-
-            return result;
+            var result = await response.Content.ReadFromJsonAsync<TenderResponseDto>(cancellationToken: cancellationToken);
+            return result!;
         }
     }
 }

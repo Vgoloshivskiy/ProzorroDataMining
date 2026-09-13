@@ -53,16 +53,17 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         external_id VARCHAR(32) NOT NULL,
                         cpv_code VARCHAR(20),
                         status VARCHAR(50),
-                        procuring_entity_name VARCHAR(500),
+                        procuring_entity_name VARCHAR,
                         starting_amount NUMERIC(19, 4),
                         contract_total NUMERIC(19, 4),
-                        savings NUMERIC(19, 4)
+                        savings NUMERIC(19, 4),
+                        data_hash VARCHAR(64)
                     ) ON COMMIT DROP;
 
                     CREATE TEMP TABLE tmp_business_organisation
                     (
                         tender_external_id VARCHAR(32) NOT NULL,
-                        name VARCHAR(500) NOT NULL
+                        name VARCHAR NOT NULL
                     ) ON COMMIT DROP;
                     ",
                         transaction: transaction,
@@ -124,7 +125,8 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         pe.id,
                         t.starting_amount,
                         t.contract_total,
-                        t.savings
+                        t.savings,
+                        t.data_hash
                     FROM tmp_tender t
                     LEFT JOIN procuring_entity pe
                         ON pe.name = t.procuring_entity_name
@@ -135,7 +137,9 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         procuring_entity_id = EXCLUDED.procuring_entity_id,
                         starting_amount = EXCLUDED.starting_amount,
                         contract_total = EXCLUDED.contract_total,
-                        savings = EXCLUDED.savings;
+                        savings = EXCLUDED.savings,
+                        data_hash = EXCLUDED.data_hash
+                    WHERE EXCLUDED.data_hash IS DISTINCT FROM tender.data_hash;
                     ",
                         transaction: transaction,
                         cancellationToken: cancellationToken));
@@ -231,6 +235,12 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         tender.Savings,
                         NpgsqlTypes.NpgsqlDbType.Numeric,
                         cancellationToken);
+
+                    await WriteNullableAsync(
+                        writer,
+                        tender.DataHash,
+                        NpgsqlTypes.NpgsqlDbType.Varchar,
+                        cancellationToken);
                 }
 
                 await writer.CompleteAsync(cancellationToken);
@@ -302,6 +312,28 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                 value,
                 type,
                 cancellationToken);
+        }
+
+        public async Task<IReadOnlyCollection<ProzorroDataMining.Application.RepositoryContracts.TenderListItemDto>> GetTenderListAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 100;
+
+            var sql = @"
+SELECT t.external_id AS ExternalId, COALESCE(pe.name, '') AS Name
+FROM tender t
+LEFT JOIN procuring_entity pe ON pe.id = t.procuring_entity_id
+ORDER BY t.id DESC
+OFFSET @Offset ROWS
+LIMIT @Limit;";
+
+            var offset = (page - 1) * pageSize;
+
+            using var conn = _dbContext.DbConnection;
+            await conn.OpenAsync(cancellationToken);
+
+            var rows = await conn.QueryAsync<ProzorroDataMining.Application.RepositoryContracts.TenderListItemDto>(sql, new { Offset = offset, Limit = pageSize });
+            return rows.AsList();
         }
     }
 }
