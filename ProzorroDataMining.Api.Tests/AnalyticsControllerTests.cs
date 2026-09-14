@@ -1,5 +1,6 @@
 using Moq;
 using NUnit.Framework;
+using ProzorroDataMining.Application.ApplicationContracts;
 using ProzorroDataMining.Application.RepositoryContracts;
 using ProzorroDataMining.Api.Controllers;
 using Microsoft.AspNetCore.Mvc;
@@ -12,10 +13,10 @@ namespace ProzorroDataMining.Api.Tests
         [Test]
         public async System.Threading.Tasks.Task GetTenderSavings_ReturnsNotFound_WhenMissing()
         {
-            var repo = new Mock<ITenderAnalyticsRepository>();
-            repo.Setup(r => r.GetBudgetSavingsByTenderIdAsync("missing", It.IsAny<CancellationToken>())).ReturnsAsync((decimal?)null);
+            var svc = new Mock<IAnalyticsService>();
+            svc.Setup(r => r.GetBudgetSavingsByTenderIdAsync("missing", It.IsAny<CancellationToken>())).ReturnsAsync((decimal?)null);
 
-            var controller = new AnalyticsController(repo.Object);
+            var controller = new AnalyticsController(svc.Object);
 
             var result = await controller.GetTenderSavings("missing", CancellationToken.None);
 
@@ -25,11 +26,11 @@ namespace ProzorroDataMining.Api.Tests
         [Test]
         public async System.Threading.Tasks.Task GetSummary_ReturnsOk()
         {
-            var repo = new Mock<ITenderAnalyticsRepository>();
-            repo.Setup(r => r.GetTopProcuringEntitiesAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { new NameValueDto("A", 1m) });
-            repo.Setup(r => r.GetTopSuppliersAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { new NameValueDto("B", 2m) });
+            var svc = new Mock<IAnalyticsService>();
+            svc.Setup(r => r.GetTopProcuringEntitiesAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { new NameValueDto("A", 1m) });
+            svc.Setup(r => r.GetTopSuppliersAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { new NameValueDto("B", 2m) });
 
-            var controller = new AnalyticsController(repo.Object);
+            var controller = new AnalyticsController(svc.Object);
 
             var result = await controller.GetTopProcuringEntities(5, CancellationToken.None) as OkObjectResult;
 

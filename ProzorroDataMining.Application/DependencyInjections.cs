@@ -14,11 +14,18 @@ public static class DependencyInjections
     /// </summary>
     /// <param name="services"></param>
     /// <returns></returns>
+    /// <summary>
+    /// Registers application-level services and use-case implementations into the DI container.
+    /// </summary>
+    /// <param name="services">Service collection to register into.</param>
+    /// <returns>The modified service collection.</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddSingleton<SemaphoreSlim>(new SemaphoreSlim(1, 1));
         services.AddTransient<IDataSyncService, DataSyncService>();
         services.AddTransient<ITenderService, TenderService>();
+        // Analytics service wraps repository and provides application-level abstraction
+        services.AddTransient<IAnalyticsService, AnalyticsService>();
         return services;
     }
 }

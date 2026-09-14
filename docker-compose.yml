@@ -1,3 +1,4 @@
+
 services:
   prozorrodatamining.api:
     image: ${DOCKER_REGISTRY-}prozorrodataminingapi
@@ -12,8 +13,29 @@ services:
       - POSTGRES_PASSWORD=admin
       - POSTGRES_DATABASE=ProzorroData
       - POSTGRES_PORT=5432
+      # DataSync search window (ISO-8601 date or datetime). If invalid or missing, service falls back to 1 month ago -> today.
+      - DATASYNC_SEARCH_MONTH_START=2026-09-01T00:00:00Z
+      - DATASYNC_SEARCH_MONTH_END=2026-09-30T00:00:00Z
     ports:
       - "7654:9090"
+    networks:
+      - postgres-network
+
+  frontend:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND=http://prozorrodatamining.api:9090
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - prozorrodatamining.api
+    networks:
+      - postgres-network
 
   postgresdb:
     image: postgres:15
@@ -23,8 +45,7 @@ services:
       - POSTGRES_PASSWORD=admin
       - POSTGRES_DB=ProzorroData
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./ProzorroDataMining.Api/Init.js:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./ProzorroDataMining.Api/DbInit:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     networks:

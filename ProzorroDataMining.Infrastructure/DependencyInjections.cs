@@ -20,6 +20,11 @@ public static class DependencyInjections
     /// </summary>
     /// <param name="services"></param>
     /// <returns></returns>
+    /// <summary>
+    /// Registers infrastructure services, repositories, HttpClient typed clients and related policies.
+    /// </summary>
+    /// <param name="services">Service collection to register into.</param>
+    /// <returns>The modified service collection.</returns>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
         // Infrastructure registrations

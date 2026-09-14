@@ -21,11 +21,21 @@ namespace ProzorroDataMining.Infrastructure.Repositories
     {
         private readonly DapperDbContext _dbContext;
 
+        /// <summary>
+        /// Creates a new instance of <see cref="TenderRepository"/>.
+        /// </summary>
+        /// <param name="dbContext">Dapper DB context for database access.</param>
         public TenderRepository(DapperDbContext dbContext)
         {
             _dbContext = dbContext;
         }
 
+        /// <summary>
+        /// Upserts a batch of tenders into the database. Existing rows are updated by external_id
+        /// when the incoming <c>date_modified</c> differs from the stored value.
+        /// </summary>
+        /// <param name="tenders">Collection of tenders to persist.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public async Task UpsertTendersAsync(
             IReadOnlyCollection<TenderImportModel> tenders,
             CancellationToken cancellationToken = default)
@@ -53,7 +63,6 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         starting_amount NUMERIC(19, 4),
                         contract_total NUMERIC(19, 4),
                         savings NUMERIC(19, 4),
-                        data_hash VARCHAR(64),
                         date_created timestamptz,
                         date_modified timestamptz
                     ) ON COMMIT DROP;
@@ -115,7 +124,6 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         starting_amount,
                         contract_total,
                         savings,
-                        data_hash,
                         date_created,
                         date_modified
                     )
@@ -127,7 +135,6 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         t.starting_amount,
                         t.contract_total,
                         t.savings,
-                        t.data_hash,
                         date_trunc('second', t.date_created),
                         date_trunc('second', t.date_modified)
                     FROM (
@@ -135,13 +142,12 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                             external_id,
                             cpv_code,
                             status,
-                            procuring_entity_name,
-                            starting_amount,
-                            contract_total,
-                            savings,
-                            data_hash,
-                            date_created,
-                            date_modified
+                        procuring_entity_name,
+                        starting_amount,
+                        contract_total,
+                        savings,
+                        date_created,
+                        date_modified
                         FROM tmp_tender
                         ORDER BY external_id, date_modified DESC NULLS LAST
                     ) t
@@ -155,10 +161,9 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         starting_amount = EXCLUDED.starting_amount,
                         contract_total = EXCLUDED.contract_total,
                         savings = EXCLUDED.savings,
-                        data_hash = EXCLUDED.data_hash,
                         date_created = date_trunc('second', EXCLUDED.date_created),
                         date_modified = date_trunc('second', EXCLUDED.date_modified)
-                    WHERE EXCLUDED.data_hash IS DISTINCT FROM tender.data_hash;
+                    WHERE EXCLUDED.date_modified IS DISTINCT FROM tender.date_modified;
                     ",
                         transaction: transaction,
                         cancellationToken: cancellationToken));
@@ -189,6 +194,9 @@ namespace ProzorroDataMining.Infrastructure.Repositories
             // ensure connection disposed/closed by awaiting its disposal
         }
 
+        /// <summary>
+        /// Performs a binary COPY of tender rows into a temporary table used during upsert.
+        /// </summary>
         private async Task CopyTendersAsync(
             NpgsqlConnection connection,
             NpgsqlTransaction transaction,
@@ -206,7 +214,6 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                 starting_amount,
                 contract_total,
                 savings,
-                data_hash,
                 date_created,
                 date_modified
             )
@@ -259,11 +266,7 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         NpgsqlTypes.NpgsqlDbType.Numeric,
                         cancellationToken);
 
-                    await WriteNullableAsync(
-                        writer,
-                        tender.DataHash,
-                        NpgsqlTypes.NpgsqlDbType.Varchar,
-                        cancellationToken);
+
 
                     await WriteNullableAsync(
                         writer,
@@ -282,6 +285,13 @@ namespace ProzorroDataMining.Infrastructure.Repositories
             }
         }
 
+        /// <summary>
+        /// Retrieves the stored <c>date_modified</c> for a tender by its external id.
+        /// Returns <c>null</c> when the tender is not found.
+        /// </summary>
+        /// <param name="externalId">External identifier of the tender.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Stored date_modified or null.</returns>
         public async Task<DateTimeOffset?> GetTenderDateModifiedAsync(string externalId, CancellationToken cancellationToken = default)
         {
             var sql = @"

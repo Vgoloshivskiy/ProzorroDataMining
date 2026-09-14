@@ -20,6 +20,7 @@
     <None Include="frontend\src\App.jsx" />
     <None Include="frontend\src\main.jsx" />
     <None Include="frontend\src\styles.css" />
+    <None Include="frontend\vite.config.js" />
     <None Include="ProzorroDataMining.Api.Tests\AnalyticsControllerTests.cs" />
     <None Include="ProzorroDataMining.Api.Tests\ProzorroDataMining.Api.Tests.csproj" />
     <None Include="ProzorroDataMining.Api.Tests\TendersControllerTests.cs" />

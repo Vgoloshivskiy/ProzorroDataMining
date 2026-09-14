@@ -20,16 +20,56 @@ namespace ProzorroDataMining.Application.Services
         private readonly ITenderRepository _tenderRepository;
         private readonly ITenderApiRepository _tenderApiRepository;
         private readonly ILogger<TenderService> _logger;
+        private readonly DateTimeOffset _searchMonthStart;
+        private readonly DateTimeOffset _searchMonthEnd;
 
         public TenderService(
             ITenderRepository tenderRepository,
             ITenderApiRepository tenderApiRepository,
-            ILogger<TenderService> logger)
+            ILogger<TenderService> logger,
+            Microsoft.Extensions.Configuration.IConfiguration configuration)
         {
             _tenderRepository = tenderRepository;
             _tenderApiRepository = tenderApiRepository;
             _logger = logger;
+
+            // Read date range from configuration (supports keys: DataSync:SearchMonthStart / DataSync:SearchMonthEnd
+            // or environment variables DATASYNC_SEARCH_MONTH_START / DATASYNC_SEARCH_MONTH_END).
+            DateTimeOffset startFallback, endFallback;
+            var now = DateTimeOffset.UtcNow.Date;
+            endFallback = now;
+            startFallback = now.AddMonths(-1);
+
+            DateTimeOffset parsedStart, parsedEnd;
+            var startRaw = configuration["DataSync:SearchMonthStart"] ?? configuration["DATASYNC_SEARCH_MONTH_START"];
+            var endRaw = configuration["DataSync:SearchMonthEnd"] ?? configuration["DATASYNC_SEARCH_MONTH_END"];
+
+            if (!string.IsNullOrEmpty(startRaw) && DateTimeOffset.TryParse(startRaw, out parsedStart))
+            {
+                _searchMonthStart = parsedStart.ToUniversalTime();
+            }
+            else
+            {
+                _logger.LogWarning("Invalid or missing DataSync:SearchMonthStart ('{Value}'), falling back to one month ago: {Fallback}", startRaw, startFallback);
+                _searchMonthStart = startFallback;
+            }
+
+            if (!string.IsNullOrEmpty(endRaw) && DateTimeOffset.TryParse(endRaw, out parsedEnd))
+            {
+                _searchMonthEnd = parsedEnd.ToUniversalTime();
+            }
+            else
+            {
+                _logger.LogWarning("Invalid or missing DataSync:SearchMonthEnd ('{Value}'), falling back to today: {Fallback}", endRaw, endFallback);
+                _searchMonthEnd = endFallback;
+            }
         }
+        /// <summary>
+        /// Fetches detailed tender information for a collection of tender IDs, mapping them to TenderImportModel instances.
+        /// </summary>
+        /// <param name="tenderIds"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task<IReadOnlyCollection<TenderImportModel>> FetchTenderDetailsAsync(
     IReadOnlyCollection<ProzorroDataMining.Core.Entities.DTOs.TenderListItemDto> tenderIds,
     CancellationToken cancellationToken = default)
@@ -63,6 +103,15 @@ namespace ProzorroDataMining.Application.Services
 
             return results;
         }
+        /// <summary>
+        /// Processes a single tender by fetching its details and mapping it to a TenderImportModel.
+        /// </summary>
+        /// <param name="tenderItem"></param>
+        /// <param name="semaphore"></param>
+        /// <param name="results"></param>
+        /// <param name="mapper"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         private async Task ProcessTenderAsync(
     ProzorroDataMining.Core.Entities.DTOs.TenderListItemDto tenderItem,
     SemaphoreSlim semaphore,
@@ -99,12 +148,8 @@ namespace ProzorroDataMining.Application.Services
 
                     if (tender != null)
                     {
-                        // Filter out tenders with CPV code 09310000-5 to avoid inserting unwanted items
+                        //insert only tenders we are interested in
                         if (string.Equals(tender.CPVCode, "09310000-5", StringComparison.OrdinalIgnoreCase))
-                        {
-                            _logger.LogInformation("Skipping tender {TenderId} because CPV code {CPV} is excluded.", tenderItem.Id, tender.CPVCode);
-                        }
-                        else
                         {
                             lock (results)
                             {
@@ -129,26 +174,17 @@ namespace ProzorroDataMining.Application.Services
                 semaphore.Release();
             }
         }
+        /// <summary>
+        /// Fetches batches of tender IDs from the external API, yielding them as asynchronous enumerable collections. Each batch contains a maximum of BatchSize tender IDs. The method handles pagination and stops fetching when it reaches tenders outside the specified date range or when it detects that the first tender on a page has not changed since the last sync.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async IAsyncEnumerable<IReadOnlyCollection<ProzorroDataMining.Core.Entities.DTOs.TenderListItemDto>> FetchTenderIdBatchesAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var search_month_start = new DateTimeOffset(
-                2026,
-                8,
-                1,
-                0,
-                0,
-                0,
-                TimeSpan.Zero);
+            var search_month_start = _searchMonthStart;
 
-            var search_month_end = new DateTimeOffset(
-                2026,
-                9,
-                1,
-                0,
-                0,
-                0,
-                TimeSpan.Zero);
+            var search_month_end = _searchMonthEnd;
 
             var uri =
                 $"https://public-api.prozorro.gov.ua/api/2.5/tenders?opt_fields=id,dateCreated,dateModified,status" +
@@ -159,7 +195,8 @@ namespace ProzorroDataMining.Application.Services
             // Track seen external ids during this sync run to avoid duplicates across pages/batches
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            while (!string.IsNullOrEmpty(uri))
+            var stopPaging = false;
+            while (!string.IsNullOrEmpty(uri) && !stopPaging)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -203,6 +240,42 @@ namespace ProzorroDataMining.Application.Services
                 catch (Exception ex)
                 {
                     _logger.LogDebug(ex, "Failed to validate page.next_page.Offset; continuing pagination.");
+                }
+
+                // Check only the first relevant tender on the page to decide whether to stop paginating.
+                var first_relevant = page.Data.FirstOrDefault(t =>
+                    t.DateCreated >= search_month_start &&
+                    t.DateCreated < search_month_end &&
+                    string.Equals(t.Status, "complete", StringComparison.OrdinalIgnoreCase));
+
+                if (first_relevant != null)
+                {
+                    // Normalize and truncate dateModified to UTC seconds to match stored format
+                    if (first_relevant.DateModified.HasValue)
+                    {
+                        var utcFirst = first_relevant.DateModified.Value.ToUniversalTime();
+                        first_relevant.DateModified = new DateTimeOffset(utcFirst.DateTime.AddTicks(-(utcFirst.Ticks % TimeSpan.TicksPerSecond)), TimeSpan.Zero);
+                    }
+
+                    try
+                    {
+                        var storedFirst = await _tenderRepository.GetTenderDateModifiedAsync(first_relevant.Id, cancellationToken);
+                        if (storedFirst.HasValue && first_relevant.DateModified.HasValue && storedFirst.Value == first_relevant.DateModified.Value)
+                        {
+                            _logger.LogInformation("First tender on page {TenderId} matches stored dateModified; stopping further pagination.", first_relevant.Id);
+                            stopPaging = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to check stored date_modified for first tender on page {TenderId}; will continue.", first_relevant.Id);
+                    }
+                }
+
+                if (stopPaging)
+                {
+                    // stop paginating further pages
+                    break;
                 }
 
                 foreach (var tender in page.Data)

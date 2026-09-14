@@ -17,9 +17,13 @@ Prerequisites: Docker Desktop.
 
    docker compose up --build
 
-   The docker-compose file starts two services:
+   The docker-compose file starts three services:
    - prozorrodatamining.api — the API service
    - postgresdb — PostgreSQL used for storage
+   - frontend — a React-based frontend for visualizing the analytics provided by the backend API. It is implemented with Vite and runs on port :3000. The frontend was included as an optional part of the task and currently provides a basic visualization of the available analytics endpoints; it is not fully implemented or production-polished.
+   - Launch Refresh there to trigger ingestion and then view the analytics endpoints.
+   - Also contains swagger UI at /swagger/index.html for testing the API endpoints at port :7654.
+   - You can set dates for search in docker-compose.yml so you won't have to injest all dates to desired start date of 2025.12.1
 
 2. The database init SQL is mounted into Postgres and runs on first startup to create the schema.
 
@@ -39,7 +43,7 @@ Prerequisites: Docker Desktop.
    - Important columns and types:
 	 - `tender.external_id` VARCHAR(32) (unique)
 	 - `tender.starting_amount`, `tender.contract_total`, `tender.savings` as NUMERIC(19,4)
-	 - `tender.data_hash` VARCHAR(64) — SHA256 hex digest of key tender payload fields used to skip unchanged updates.
+	 - `tender.date_modified` timestamptz — used to detect updates; incoming records are compared by external_id and date_modified.
    - Indexes:
 	- Unique index on `external_id`
    - Indexes on `procuring_entity_id` and on the mapping table for supplier aggregation.

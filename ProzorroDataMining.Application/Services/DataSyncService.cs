@@ -9,7 +9,6 @@ using ProzorroDataMining.Application.RepositoryContracts;
 
 namespace ProzorroDataMining.Application.Services
 {
-    public interface IDataSyncService { Task<bool> RefreshLocalDataAsync(CancellationToken cancellationToken = default); }
     public class DataSyncService : IDataSyncService
     {
         private readonly ITenderRepository _tenderRepository;
@@ -21,6 +20,11 @@ namespace ProzorroDataMining.Application.Services
             _logger = logger;
             _tenderRepository = tenderRepository;
         }
+        /// <summary>
+        /// Refreshes the local database by synchronizing it with the external system. This method fetches tender IDs in batches, retrieves their details, and upserts them into the local repository. It handles cancellation and logs the process.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task<bool> RefreshLocalDataAsync(
     CancellationToken cancellationToken = default)
         {
