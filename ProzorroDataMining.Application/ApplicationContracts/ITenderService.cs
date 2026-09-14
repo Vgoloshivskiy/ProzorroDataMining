@@ -9,10 +9,10 @@ namespace ProzorroDataMining.Application.ApplicationContracts
 {
     public interface ITenderService
     {
-        IAsyncEnumerable<IReadOnlyCollection<string>> FetchTenderIdBatchesAsync(
+        IAsyncEnumerable<IReadOnlyCollection<ProzorroDataMining.Core.Entities.DTOs.TenderListItemDto>> FetchTenderIdBatchesAsync(
             CancellationToken cancellationToken = default);
         Task<IReadOnlyCollection<TenderImportModel>> FetchTenderDetailsAsync(
-    IReadOnlyCollection<string> tenderIds,
+    IReadOnlyCollection<ProzorroDataMining.Core.Entities.DTOs.TenderListItemDto> tenderIds,
     CancellationToken cancellationToken = default);
     }
 }

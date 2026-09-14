@@ -12,6 +12,9 @@ namespace ProzorroDataMining.Core.Entities.DTOs
 
         public DateTimeOffset DateCreated { get; set; }
 
+        // Date the tender was last modified according to the external API
+        public DateTimeOffset? DateModified { get; set; }
+
         public string Status { get; set; }
     }
 }

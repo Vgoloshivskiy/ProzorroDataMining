@@ -12,6 +12,9 @@ namespace ProzorroDataMining.Application.RepositoryContracts
             IReadOnlyCollection<TenderImportModel> tenders,
             CancellationToken cancellationToken = default);
 
+        // Returns the stored date_modified for a tender or null if the tender does not exist
+        Task<DateTimeOffset?> GetTenderDateModifiedAsync(string externalId, CancellationToken cancellationToken = default);
+
         Task<IReadOnlyCollection<TenderListItemDto>> GetTenderListAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     }
 }

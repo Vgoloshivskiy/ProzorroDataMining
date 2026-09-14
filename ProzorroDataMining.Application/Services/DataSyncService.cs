@@ -29,12 +29,12 @@ namespace ProzorroDataMining.Application.Services
 
             try
             {
-                await foreach (var tenderIds in _tenderService
+                await foreach (var tenderItems in _tenderService
                     .FetchTenderIdBatchesAsync(cancellationToken))
                 {
                     var tenders = await _tenderService
                         .FetchTenderDetailsAsync(
-                            tenderIds,
+                            tenderItems,
                             cancellationToken);
 
                     await _tenderRepository

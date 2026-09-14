@@ -12,6 +12,8 @@ services:
       - POSTGRES_PASSWORD=admin
       - POSTGRES_DATABASE=ProzorroData
       - POSTGRES_PORT=5432
+    ports:
+      - "7654:9090"
 
   postgresdb:
     image: postgres:15

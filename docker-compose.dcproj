@@ -14,6 +14,12 @@
     </None>
     <None Include="docker-compose.yml" />
     <None Include=".dockerignore" />
+    <None Include="frontend\index.html" />
+    <None Include="frontend\package.json" />
+    <None Include="frontend\README.md" />
+    <None Include="frontend\src\App.jsx" />
+    <None Include="frontend\src\main.jsx" />
+    <None Include="frontend\src\styles.css" />
     <None Include="ProzorroDataMining.Api.Tests\AnalyticsControllerTests.cs" />
     <None Include="ProzorroDataMining.Api.Tests\ProzorroDataMining.Api.Tests.csproj" />
     <None Include="ProzorroDataMining.Api.Tests\TendersControllerTests.cs" />

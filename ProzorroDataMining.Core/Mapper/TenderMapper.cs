@@ -59,9 +59,20 @@ namespace ProzorroDataMining.Core.Mapper
             var json = System.Text.Json.JsonSerializer.Serialize(payload);
             var hash = ComputeSha256Hash(json);
 
+            // Normalize dateCreated/dateModified to UTC and truncate to seconds to avoid precision mismatches
+            DateTimeOffset? NormalizeTruncate(DateTimeOffset? d)
+            {
+                if (!d.HasValue) return null;
+                var utc = d.Value.ToUniversalTime();
+                var truncated = new DateTimeOffset(utc.DateTime.AddTicks(-(utc.Ticks % TimeSpan.TicksPerSecond)), TimeSpan.Zero);
+                return truncated;
+            }
+
             return new TenderImportModel
             {
                 ExternalId = data.Id,
+                DateModified = NormalizeTruncate(data.DateModified),
+                DateCreated = NormalizeTruncate(data.DateCreated),
                 CPVCode = cpvCode,
                 Status = data.Status,
                 ProcuringEntityName =

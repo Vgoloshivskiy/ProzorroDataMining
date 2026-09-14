@@ -18,6 +18,12 @@ namespace ProzorroDataMining.Core.Entities.DTOs
         [JsonPropertyName("value")]
         public TenderValueDto Value { get; set; }
 
+        [JsonPropertyName("dateModified")]
+        public DateTimeOffset? DateModified { get; set; }
+
+        [JsonPropertyName("dateCreated")]
+        public DateTimeOffset? DateCreated { get; set; }
+
         [JsonPropertyName("procuringEntity")]
         public ProcuringEntityDto ProcuringEntity { get; set; }
 

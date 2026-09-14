@@ -35,14 +35,10 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                 return;
             }
 
-            var connection = _dbContext.DbConnection;
+            await using var connection = _dbContext.DbConnection;
+            await connection.OpenAsync(cancellationToken);
 
-            if (connection.State != ConnectionState.Open)
-            {
-                await connection.OpenAsync(cancellationToken);
-            }
-
-            using (var transaction = await connection.BeginTransactionAsync(
+            await using (var transaction = await connection.BeginTransactionAsync(
                 cancellationToken))
             {
                 await connection.ExecuteAsync(
@@ -57,7 +53,9 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         starting_amount NUMERIC(19, 4),
                         contract_total NUMERIC(19, 4),
                         savings NUMERIC(19, 4),
-                        data_hash VARCHAR(64)
+                        data_hash VARCHAR(64),
+                        date_created timestamptz,
+                        date_modified timestamptz
                     ) ON COMMIT DROP;
 
                     CREATE TEMP TABLE tmp_business_organisation
@@ -116,7 +114,10 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         procuring_entity_id,
                         starting_amount,
                         contract_total,
-                        savings
+                        savings,
+                        data_hash,
+                        date_created,
+                        date_modified
                     )
                     SELECT
                         t.external_id,
@@ -126,8 +127,24 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         t.starting_amount,
                         t.contract_total,
                         t.savings,
-                        t.data_hash
-                    FROM tmp_tender t
+                        t.data_hash,
+                        date_trunc('second', t.date_created),
+                        date_trunc('second', t.date_modified)
+                    FROM (
+                        SELECT DISTINCT ON (external_id)
+                            external_id,
+                            cpv_code,
+                            status,
+                            procuring_entity_name,
+                            starting_amount,
+                            contract_total,
+                            savings,
+                            data_hash,
+                            date_created,
+                            date_modified
+                        FROM tmp_tender
+                        ORDER BY external_id, date_modified DESC NULLS LAST
+                    ) t
                     LEFT JOIN procuring_entity pe
                         ON pe.name = t.procuring_entity_name
                     ON CONFLICT (external_id)
@@ -138,7 +155,9 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         starting_amount = EXCLUDED.starting_amount,
                         contract_total = EXCLUDED.contract_total,
                         savings = EXCLUDED.savings,
-                        data_hash = EXCLUDED.data_hash
+                        data_hash = EXCLUDED.data_hash,
+                        date_created = date_trunc('second', EXCLUDED.date_created),
+                        date_modified = date_trunc('second', EXCLUDED.date_modified)
                     WHERE EXCLUDED.data_hash IS DISTINCT FROM tender.data_hash;
                     ",
                         transaction: transaction,
@@ -167,6 +186,7 @@ namespace ProzorroDataMining.Infrastructure.Repositories
 
                 await transaction.CommitAsync(cancellationToken);
             }
+            // ensure connection disposed/closed by awaiting its disposal
         }
 
         private async Task CopyTendersAsync(
@@ -185,7 +205,10 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                 procuring_entity_name,
                 starting_amount,
                 contract_total,
-                savings
+                savings,
+                data_hash,
+                date_created,
+                date_modified
             )
             FROM STDIN (FORMAT BINARY)
             ",
@@ -241,10 +264,43 @@ namespace ProzorroDataMining.Infrastructure.Repositories
                         tender.DataHash,
                         NpgsqlTypes.NpgsqlDbType.Varchar,
                         cancellationToken);
+
+                    await WriteNullableAsync(
+                        writer,
+                        tender.DateCreated,
+                        NpgsqlTypes.NpgsqlDbType.TimestampTz,
+                        cancellationToken);
+
+                    await WriteNullableAsync(
+                        writer,
+                        tender.DateModified,
+                        NpgsqlTypes.NpgsqlDbType.TimestampTz,
+                        cancellationToken);
                 }
 
                 await writer.CompleteAsync(cancellationToken);
             }
+        }
+
+        public async Task<DateTimeOffset?> GetTenderDateModifiedAsync(string externalId, CancellationToken cancellationToken = default)
+        {
+            var sql = @"
+SELECT date_modified FROM tender WHERE external_id = @ExternalId LIMIT 1;";
+
+            using var conn = _dbContext.DbConnection;
+            await conn.OpenAsync(cancellationToken);
+
+            var result = await conn.QueryFirstOrDefaultAsync<DateTime?>(sql, new { ExternalId = externalId });
+
+            if (result.HasValue)
+            {
+                // Interpret DB timestamptz as UTC and truncate to seconds to match mapper normalization
+                var dt = DateTime.SpecifyKind(result.Value, DateTimeKind.Utc);
+                var truncated = new DateTime(dt.AddTicks(-(dt.Ticks % TimeSpan.TicksPerSecond)).Ticks, DateTimeKind.Utc);
+                return new DateTimeOffset(truncated);
+            }
+
+            return null;
         }
 
         private async Task CopyBusinessOrganisationsAsync(

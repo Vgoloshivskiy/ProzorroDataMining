@@ -11,6 +11,10 @@ namespace ProzorroDataMining.Core.Entities
         public string ExternalId { get; set; }
         // SHA256 hash of the tender payload used to detect unchanged records and avoid unnecessary updates
         public string DataHash { get; set; }
+        // Date when the tender was last modified in the external API
+        public DateTimeOffset? DateModified { get; set; }
+        // Date when the tender was created in the external API
+        public DateTimeOffset? DateCreated { get; set; }
         public string CPVCode { get; set; }
         public string Status { get; set; }
         public string ProcuringEntityName { get; set; }

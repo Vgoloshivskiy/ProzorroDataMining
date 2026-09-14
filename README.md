@@ -43,14 +43,13 @@ Prerequisites: Docker Desktop.
    - Indexes:
 	- Unique index on `external_id`
    - Indexes on `procuring_entity_id` and on the mapping table for supplier aggregation.
-   - Note: indexes on `cpv_code` and `status` were removed from the DB initialization script because the application intentionally filters out tender rows where `status = 'complete'` and where `cpv_code = '09310000-5'`. Maintaining btree indexes for columns that are commonly excluded with inequality filters (status != ... or cpv_code != ...) caused high insert overhead without providing useful selectivity for our workload; removing these indexes improves bulk insert throughput. If you later need fast point-lookup or range queries on these columns, consider adding targeted partial indexes that match the query predicates.
    - Aggregations use server-side SQL and Dapper; queries are written to use indexes where possible. For very large datasets (millions of rows) consider:
 	 - Partitioning the `tender` table by date range (monthly/yearly) if queries filter by date.
 	 - Adding indexes tailored to common query predicates (e.g., contract_total ranges, date fields) and using EXPLAIN ANALYZE to refine.
 
 2. Code Quality
 
-   - Layered architecture: Controllers call Application services which rely on repository contracts implemented in Infrastructure.
+   - Onion/Clean architecture: API controllers call Application services; those services depend on repository and client interfaces declared in the Application layer, concrete implementations live in Infrastructure and are registered at the API composition root.
    - Naming is kept consistent and small helper types (DTOs) are used for cross-layer contracts.
    - README and docker-compose are included for local setup.
 
@@ -77,4 +76,3 @@ Prerequisites: Docker Desktop.
 ## Tests
 
 - Unit tests are included under `ProzorroDataMining.Api.Tests` (NUnit + Moq).
-
